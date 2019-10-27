@@ -9,9 +9,11 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.os.Bundle;
+import android.os.PowerManager;
 import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
+
 
 
 public class MainActivity extends AppCompatActivity {
@@ -22,6 +24,7 @@ public class MainActivity extends AppCompatActivity {
     private TextView currentY;
     private TextView currentZ;
     Button btnStartService, btnStopService;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -46,25 +49,31 @@ public class MainActivity extends AppCompatActivity {
         startAccelerometer();
     }
 
-    private void startAccelerometer(){
-//        Intent accelerometerIntent = new Intent(this, AccelerometerService.class);
-//        startService(accelerometerIntent);
-        //AccelerometerService.enqueueWork(getApplicationContext(), AccelerometerService.class, ACCELEROMETER_SERVICE_ID, accelerometerIntent);
+    @Override
+    protected void onDestroy(){
+        super.onDestroy();
 
-//        btnStartService.setOnClickListener(new View.OnClickListener() {
-//            @Override
-//            public void onClick(View v) {
+    }
+    private void startAccelerometer(){
+
+
+        btnStartService.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
                 startService();
-//            }
-//        });
-/*
+            }
+        });
+
         btnStopService.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 stopService();
             }
         });
-*/
+
+
+
+        startService();
         LocalBroadcastManager.getInstance(this).registerReceiver(accDataReceiver, new IntentFilter("ACCDATA"));
     }
 
@@ -91,5 +100,7 @@ public class MainActivity extends AppCompatActivity {
         Intent accelerometerIntent = new Intent(this, AccelerometerService.class);
         stopService(accelerometerIntent);
     }
+
+
 }
 
