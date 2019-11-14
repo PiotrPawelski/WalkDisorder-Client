@@ -22,11 +22,15 @@ import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 import com.android.volley.Request;
 import com.android.volley.RequestQueue;
+import com.android.volley.Response;
 import com.android.volley.toolbox.JsonObjectRequest;
 import com.android.volley.toolbox.Volley;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+
+import java.util.Arrays;
 
 public class AccelerometerService extends Service implements SensorEventListener {
 
@@ -35,11 +39,17 @@ public class AccelerometerService extends Service implements SensorEventListener
     private Sensor sensor;
     private double[] gravity = {0,0,0};
     private double[] linear_acceleration = {0,0,0};
+    private Double[] tempArray = new Double[210];
+    private int iterate = 0;
+    private boolean pass = false;
     RequestQueue requestQueue;
     PowerManager mgr;
     PowerManager.WakeLock wakeLock;
 
+    private final boolean TRAINING = false;
 
+    private final String trainUrl = "http://156.17.236.106:3000";
+    private final String predictUrl = "http://156.17.236.106:5000/check";
 
 
     @Override
@@ -50,9 +60,9 @@ public class AccelerometerService extends Service implements SensorEventListener
     public void onSensorChanged(SensorEvent event){
         final double alpha = 0.8;
 
-        //gravity[0] = alpha * gravity[0] + (1 - alpha) * event.values[0];
-        //gravity[1] = alpha * gravity[1] + (1 - alpha) * event.values[1];
-        //gravity[2] = alpha * gravity[2] + (1 - alpha) * event.values[2];
+        gravity[0] = alpha * gravity[0] + (1 - alpha) * event.values[0];
+        gravity[1] = alpha * gravity[1] + (1 - alpha) * event.values[1];
+        gravity[2] = alpha * gravity[2] + (1 - alpha) * event.values[2];
 
         linear_acceleration[0] = event.values[0] - gravity[0];
         linear_acceleration[1] = event.values[1] - gravity[1];
@@ -62,19 +72,48 @@ public class AccelerometerService extends Service implements SensorEventListener
 
         LocalBroadcastManager.getInstance(this).sendBroadcast(localIntent);
 
-        JSONObject json = new JSONObject();
 
-        try {
-            json.put("date",System.currentTimeMillis());
-            json.put("x",linear_acceleration[0]);
-            json.put("y",linear_acceleration[1]);
-            json.put("z",linear_acceleration[2]);
-        } catch (JSONException e) {
-            e.printStackTrace();
+
+        if(TRAINING) {
+            JSONObject json = new JSONObject();
+
+            try {
+                json.put("date", System.currentTimeMillis());
+                json.put("x", linear_acceleration[0]);
+                json.put("y", linear_acceleration[1]);
+                json.put("z", linear_acceleration[2]);
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
+
+            postTrainData(trainUrl, json);
         }
+        else{
+            double abs = Math.abs(linear_acceleration[0]) + Math.abs(linear_acceleration[1]) + Math.abs(linear_acceleration[2]);
+            if(abs > 15)
+                pass = true;
+            if(pass) {
+                if (iterate < 209) {
+                    tempArray[iterate] = linear_acceleration[0];
+                    tempArray[iterate + 1] = linear_acceleration[1];
+                    tempArray[iterate + 2] = linear_acceleration[2];
+                    iterate += 3;
+                } else {
+                    JSONObject json = new JSONObject();
+                    try {
 
-        postData("http://192.168.1.80:3000", json);
+                        JSONArray jsonArray = new JSONArray(Arrays.asList(tempArray));
+                        json.put("data", jsonArray);
+                    } catch (JSONException e) {
+                        e.printStackTrace();
+                    }
+                    iterate = 0;
+                    pass = false;
 
+                    postPredictData(predictUrl, json);
+                }
+            }
+        }
 
     }
 
@@ -109,7 +148,7 @@ public class AccelerometerService extends Service implements SensorEventListener
 
         sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         sensor = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-        sensorManager.registerListener(this, sensor, 100000);
+        sensorManager.registerListener(this, sensor, 10000);
 
 
  //       stopSelf();
@@ -144,7 +183,7 @@ public class AccelerometerService extends Service implements SensorEventListener
         }
     }
 
-    public void postData(String url, JSONObject data){
+    public void postTrainData(String url, JSONObject data){
 
         JsonObjectRequest obj = new JsonObjectRequest(Request.Method.POST, url,data,
              /*  new Response.Listener<JSONObject>() {
@@ -166,5 +205,39 @@ public class AccelerometerService extends Service implements SensorEventListener
         );
         requestQueue.add(obj);
 
+    }
+
+    public void postPredictData(String url, JSONObject data){
+
+        JsonObjectRequest obj = new JsonObjectRequest(Request.Method.POST, url,data,
+               new Response.Listener<JSONObject>() {
+                    @Override
+                    public void onResponse(JSONObject response) {
+                        broadcastResponse(response);
+                    }
+                },
+             /*   new Response.ErrorListener() {
+                    @Override
+                    public void onErrorResponse(VolleyError error) {
+                        if(mResultCallback != null){
+                            mResultCallback.notifyError(error);
+                        }
+                    }
+                }*/ null
+        );
+        requestQueue.add(obj);
+
+    }
+
+    public void broadcastResponse(JSONObject response){
+        int result = 0;
+        try {
+            result = response.getInt("result");
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+        Intent localIntent = new Intent("ACCRESPONSE").putExtra("ACCRESPONSEINT", result);
+
+        LocalBroadcastManager.getInstance(this).sendBroadcast(localIntent);
     }
 }

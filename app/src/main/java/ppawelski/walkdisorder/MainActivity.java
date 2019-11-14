@@ -9,20 +9,23 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.os.Bundle;
-import android.os.PowerManager;
 import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
 
+import net.mabboud.android_tone_player.ContinuousBuzzer;
+import net.mabboud.android_tone_player.OneTimeBuzzer;
 
 
 public class MainActivity extends AppCompatActivity {
 
 
-
+    ContinuousBuzzer buzzer;
     private TextView currentX;
     private TextView currentY;
     private TextView currentZ;
+    private TextView response;
+
     Button btnStartService, btnStopService;
 
 
@@ -34,6 +37,7 @@ public class MainActivity extends AppCompatActivity {
         currentX = findViewById(R.id.X);
         currentY = findViewById(R.id.Y);
         currentZ = findViewById(R.id.Z);
+        response = findViewById(R.id.result);
 
         TextView x = findViewById(R.id.textX);
         TextView y = findViewById(R.id.textY);
@@ -45,6 +49,10 @@ public class MainActivity extends AppCompatActivity {
 
         btnStartService = findViewById(R.id.accstart);
         btnStopService = findViewById(R.id.accstop);
+
+        buzzer = new ContinuousBuzzer();
+        buzzer.setVolume(100);
+        buzzer.setToneFreqInHz(1000);
 
         startAccelerometer();
     }
@@ -73,8 +81,10 @@ public class MainActivity extends AppCompatActivity {
 
 
 
-        startService();
+//        startService();
+        LocalBroadcastManager.getInstance(this).registerReceiver(responseDataReceiver, new IntentFilter("ACCRESPONSE"));
         LocalBroadcastManager.getInstance(this).registerReceiver(accDataReceiver, new IntentFilter("ACCDATA"));
+
     }
 
     public void displayCurrentValues(double[] linear_acceleration) {
@@ -83,11 +93,28 @@ public class MainActivity extends AppCompatActivity {
         currentZ.setText(String.format("%.2f", linear_acceleration[2]));
     }
 
+    public void displayResponse(int res) {
+        response.setText(String.format("%d", res));
+        if(res == -1)
+            buzzer.play();
+        if(res == 1)
+            buzzer.stop();
+
+    }
+
     private BroadcastReceiver accDataReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
             double[] linear_acceleration = intent.getDoubleArrayExtra("ACCDATAARRAY");
             displayCurrentValues(linear_acceleration);
+        }
+    };
+
+    private BroadcastReceiver responseDataReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            int response = intent.getIntExtra("ACCRESPONSEINT", 0);
+            displayResponse(response);
         }
     };
 
